@@ -90,3 +90,8 @@ export function regiones(C, polys) {
   visita(tree);
   return out;
 }
+
+export const interseccion = (C, a, b) => ejecutar(C, C.ClipType.ctIntersection, a, b);
+
+/** Área total (mm²) de una lista de polígonos, sumando las áreas con signo (los huecos restan si vienen con orientación opuesta). */
+export const areaTotal = (polys) => polys.reduce((s, p) => s + Math.abs(areaFirmada(p)), 0);

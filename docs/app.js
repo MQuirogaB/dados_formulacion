@@ -2,7 +2,8 @@ import opentype from "opentype.js";
 
 import { CATIONES, ANIONES, FAMILIAS_CATION, FAMILIAS_ANION, ionBonito } from "./iones.js?v=1";
 import { DEFAULTS, sanear } from "./cara.js?v=1";
-import { CARAS, hoja } from "./cubo.js?v=1";
+import { hoja } from "./dado.js?v=1";
+import { LADO_POR_DEFECTO } from "./poliedros.js?v=1";
 import { construirSVG, envolverSVG } from "./svg.js?v=1";
 import { construirSTL, aBinario, zip } from "./stl.js?v=1";
 
@@ -43,8 +44,9 @@ const fuenteElegida = () => FONTS.find((f) => f.id === el("fontFamily").value) |
 
 const TODOS = [...CATIONES, ...ANIONES];
 const porId = (id) => TODOS.find((i) => i.id === id);
-const dados = { cation: Array(6).fill(null), anion: Array(6).fill(null) };   // ids de ion (o null)
+const dados = { cation: Array(10).fill(null), anion: Array(10).fill(null) };   // ids de ion (o null); solo cuentan las primeras N caras
 const activo = { tipo: "cation", cara: 0 };
+let nCaras = 6;
 
 const NUM_FIELDS = ["lado", "tamanoTexto", "profundidad", "separacion"];
 const CHECK_FIELDS = ["mostrarNombre", "solapas", "pliegues"];
@@ -54,11 +56,13 @@ function leerParametros() {
   for (const k of NUM_FIELDS) { const v = Number(el(k).value); p[k] = el(k).value !== "" && Number.isFinite(v) ? v : DEFAULTS[k]; }
   for (const k of CHECK_FIELDS) p[k] = el(k).checked;
   p.modoTexto = el("modoTexto").value;
+  p.caras = nCaras;
   return sanear(p);
 }
 
 function aplicarDefectos() {
   for (const k of NUM_FIELDS) el(k).value = DEFAULTS[k];
+  el("lado").value = LADO_POR_DEFECTO[nCaras];
   for (const k of CHECK_FIELDS) el(k).checked = DEFAULTS[k];
   el("modoTexto").value = DEFAULTS.modoTexto;
   el("fontFamily").value = FONTS[0].id;
@@ -68,24 +72,26 @@ function aplicarDefectos() {
 // Selector de caras e iones
 // ---------------------------------------------------------------------
 
-const ETIQUETA_CARA = ["izquierda", "frente", "derecha", "fondo", "arriba", "abajo"];
+const ETIQUETA_CUBO = ["izquierda", "frente", "derecha", "fondo", "arriba", "abajo"];
+const POSICION_CUBO = [[0, 1], [1, 1], [2, 1], [3, 1], [1, 0], [1, 2]];   // columna, fila en la cruz
 
 function pintarCaras() {
   const cont = el("caras");
-  cont.className = "cruz " + activo.tipo;
+  cont.className = (nCaras === 6 ? "cruz " : "rejilla ") + activo.tipo;
   cont.replaceChildren();
-  CARAS.forEach((c, i) => {
+  for (let i = 0; i < nCaras; i++) {
     const ion = dados[activo.tipo][i] ? porId(dados[activo.tipo][i]) : null;
+    const etiqueta = nCaras === 6 ? ETIQUETA_CUBO[i] : `cara ${i + 1}`;
     const b = document.createElement("button");
     b.type = "button";
     b.className = "cara-btn" + (ion ? "" : " vacia");
-    b.style.gridColumn = c.col + 1; b.style.gridRow = c.fila + 1;
+    if (nCaras === 6) { b.style.gridColumn = POSICION_CUBO[i][0] + 1; b.style.gridRow = POSICION_CUBO[i][1] + 1; }
     b.setAttribute("aria-pressed", String(activo.cara === i));
-    b.setAttribute("aria-label", `Cara ${ETIQUETA_CARA[i]}: ${ion ? ion.f : "vacía"}`);
-    b.innerHTML = ion ? `${ionBonito(ion)}<small>${ETIQUETA_CARA[i]}</small>` : `vacía<small>${ETIQUETA_CARA[i]}</small>`;
-    b.addEventListener("click", () => { activo.cara = i; cambio(false); });
+    b.setAttribute("aria-label", `Cara ${i + 1} (${etiqueta}): ${ion ? ion.f : "vacía"}`);
+    b.innerHTML = ion ? `${ionBonito(ion)}<small>${etiqueta}</small>` : `vacía<small>${etiqueta}</small>`;
+    b.addEventListener("click", () => { activo.cara = i; cambio(); });
     cont.append(b);
-  });
+  }
 }
 
 function pintarIones() {
@@ -128,13 +134,13 @@ function ponerIon(id) {
   const caras = dados[activo.tipo];
   caras[activo.cara] = id;
   // pasa a la siguiente cara vacía (si no queda ninguna, se queda donde está)
-  for (let k = 1; k <= 6; k++) { const j = (activo.cara + k) % 6; if (!caras[j]) { activo.cara = j; break; } }
+  for (let k = 1; k <= nCaras; k++) { const j = (activo.cara + k) % nCaras; if (!caras[j]) { activo.cara = j; break; } }
   cambio(true);
 }
 
 function marcarUsos() {
   const cuentas = {};
-  for (const id of dados[activo.tipo]) if (id) cuentas[id] = (cuentas[id] || 0) + 1;
+  for (const id of dados[activo.tipo].slice(0, nCaras)) if (id) cuentas[id] = (cuentas[id] || 0) + 1;
   for (const b of document.querySelectorAll(".chip")) {
     const n = cuentas[b.dataset.id] || 0, c = b.querySelector(".cuenta");
     c.hidden = !n; c.textContent = `×${n}`;
@@ -148,10 +154,10 @@ function cambio() {
   document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.tipo === activo.tipo)));
   pintarCaras();
   marcarUsos();
-  const n = dados[activo.tipo].filter(Boolean).length;
+  const n = dados[activo.tipo].slice(0, nCaras).filter(Boolean).length;
   el("guia").textContent = n === 0
     ? "Pulsa una cara y luego el ion que quieras ponerle (o pulsa un ion y se coloca en la siguiente cara libre)."
-    : `${n} de 6 caras con ion en este dado. Pulsa una cara para cambiarla.`;
+    : `${n} de ${nCaras} caras con ion en este dado. Pulsa una cara para cambiarla.`;
   scheduleGenerate();
 }
 
@@ -177,7 +183,7 @@ async function generate() {
   busy = true;
   try {
     const q = leerParametros();
-    const con = ["cation", "anion"].filter((t) => dados[t].some(Boolean));
+    const con = ["cation", "anion"].filter((t) => dados[t].slice(0, nCaras).some(Boolean));
     if (!con.length) {
       estado = null; el("svg-btn").disabled = true; el("stl-btn").disabled = true;
       el("stats").textContent = ""; el("avisos").textContent = "";
@@ -188,14 +194,14 @@ async function generate() {
     const fuente = await cargarFuente(fuenteElegida().archivo);
     if (!window.ClipperLib) throw new Error("no se cargó la librería de bordes");
     const ctx = { fuente, clipper: window.ClipperLib };
-    const h = hoja(ctx.clipper, fuente, con.map((t) => ({ tipo: t, ions: dados[t].map((id) => (id ? porId(id) : null)) })), q);
+    const h = hoja(ctx.clipper, fuente, con.map((t) => ({ tipo: t, ions: dados[t].slice(0, nCaras).map((id) => (id ? porId(id) : null)) })), q);
     const vista = construirSVG(h, { vista: true, activa: { tipo: activo.tipo, cara: activo.cara } });
     holder.innerHTML = envolverSVG(vista.w, vista.h, vista.inner);
     holder.querySelectorAll("g.cara").forEach((g) => g.addEventListener("click", () => {
       activo.tipo = g.dataset.tipo; activo.cara = Number(g.dataset.cara);
       pintarIones(); cambio(true);
     }));
-    el("stats").textContent = `${con.length === 2 ? "2 dados" : "1 dado"} · cubo de ${q.lado} mm · hoja de ${vista.w.toFixed(0)} × ${vista.h.toFixed(0)} mm`;
+    el("stats").textContent = `${con.length === 2 ? "2 dados" : "1 dado"} de ${q.caras} caras · ${q.lado} mm · hoja de ${vista.w.toFixed(0)} × ${vista.h.toFixed(0)} mm`;
     el("avisos").textContent = "";
     estado = { h, q, ctx };
     el("svg-btn").disabled = false; el("stl-btn").disabled = false;
@@ -237,13 +243,23 @@ el("stl-btn").addEventListener("click", () => {
 // Eventos
 // ---------------------------------------------------------------------
 
-document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => { activo.tipo = t.dataset.tipo; activo.cara = Math.max(0, dados[activo.tipo].findIndex((x) => !x)); pintarIones(); cambio(true); }));
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => { activo.tipo = t.dataset.tipo; activo.cara = Math.max(0, dados[activo.tipo].slice(0, nCaras).findIndex((x) => !x)); pintarIones(); cambio(true); }));
+const ETIQUETA_LADO = { 6: "Arista del cubo (mm)", 8: "Arista del octaedro (mm)", 10: "Arista larga del decaedro (mm)" };
+function elegirCaras(n, conservarTamano = false) {
+  nCaras = n;
+  document.querySelectorAll(".caras-btn").forEach((b) => b.setAttribute("aria-checked", String(Number(b.dataset.caras) === n)));
+  el("lado-etq").textContent = ETIQUETA_LADO[n];
+  if (!conservarTamano) el("lado").value = LADO_POR_DEFECTO[n];
+  if (activo.cara >= n) activo.cara = 0;
+  cambio();
+}
+document.querySelectorAll(".caras-btn").forEach((b) => b.addEventListener("click", () => elegirCaras(Number(b.dataset.caras))));
 el("filtro").addEventListener("input", filtrar);
 el("vaciar-cara").addEventListener("click", () => { dados[activo.tipo][activo.cara] = null; cambio(true); });
-el("vaciar").addEventListener("click", () => { dados[activo.tipo] = Array(6).fill(null); activo.cara = 0; cambio(true); });
+el("vaciar").addEventListener("click", () => { dados[activo.tipo] = Array(10).fill(null); activo.cara = 0; cambio(true); });
 el("azar").addEventListener("click", () => {
   const lista = (activo.tipo === "cation" ? CATIONES : ANIONES).filter((i) => i.binario);
-  dados[activo.tipo] = barajar([...lista]).slice(0, 6).map((i) => i.id);
+  dados[activo.tipo] = [...barajar([...lista]).slice(0, nCaras).map((i) => i.id), ...Array(10 - nCaras).fill(null)];
   activo.cara = 0; cambio(true);
 });
 for (const k of [...NUM_FIELDS, ...CHECK_FIELDS, "modoTexto", "fontFamily"]) { el(k).addEventListener("input", scheduleGenerate); el(k).addEventListener("change", scheduleGenerate); }
@@ -252,6 +268,7 @@ el("reset-btn").addEventListener("click", () => { aplicarDefectos(); scheduleGen
 // arranque
 for (const f of FONTS) { const o = document.createElement("option"); o.value = f.id; o.textContent = f.nombre; el("fontFamily").append(o); }
 aplicarDefectos();
+el("lado-etq").textContent = ETIQUETA_LADO[nCaras];
 pintarIones();
 cambio(true);
 generate();

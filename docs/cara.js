@@ -5,7 +5,8 @@ import { aplanar, caja } from "./geo.js";
 import { cargaTexto, ROMANOS } from "./iones.js";
 
 export const DEFAULTS = {
-  lado: 30,          // arista del cubo (mm)
+  caras: 6,          // número de caras del dado: 6 (cubo), 8 (octaedro) o 10 (decaedro)
+  lado: 30,          // tamaño del dado (mm): arista del cubo, arista del octaedro o arista larga del decaedro
   tamanoTexto: 1,    // factor para agrandar o reducir las letras
   mostrarNombre: false,
   profundidad: 0.8,  // profundidad del texto hundido / altura del relieve en 3D (mm)
@@ -20,10 +21,11 @@ export const MODOS = ["hundido", "relieve", "incrustado"];
 
 export function sanear(p = {}) {
   const q = { ...DEFAULTS, ...p };
-  q.lado = Math.min(80, Math.max(15, num(q.lado, DEFAULTS.lado)));
+  q.caras = [6, 8, 10].includes(Number(q.caras)) ? Number(q.caras) : 6;
+  q.lado = Math.min(120, Math.max(15, num(q.lado, DEFAULTS.lado)));
   q.tamanoTexto = Math.min(2, Math.max(0.5, num(q.tamanoTexto, 1)));
   q.mostrarNombre = !!q.mostrarNombre;
-  q.profundidad = Math.min(Math.max(0.2, q.lado / 4), Math.max(0.2, num(q.profundidad, DEFAULTS.profundidad)));
+  q.profundidad = Math.min(Math.max(0.2, q.lado / 8), Math.max(0.2, num(q.profundidad, DEFAULTS.profundidad)));
   q.modoTexto = MODOS.includes(q.modoTexto) ? q.modoTexto : "hundido";
   q.solapas = !!q.solapas;
   q.pliegues = !!q.pliegues;
@@ -45,12 +47,12 @@ function trozos(formula) {
 }
 
 /**
- * Polígonos del texto de una cara (sin unir), centrados en (0, 0) y con la y hacia arriba.
- * La y de opentype va hacia abajo, así que se vuelca al final.
+ * Polígonos del texto de una cara, centrados en el origen de la cara (más `caja.cy`) y con la y hacia arriba.
+ * `caja` = { w, h, cy }: el rectángulo en el que debe caber el texto (por defecto, el 80 % de la cara de un cubo).
  */
-export function textoCara(fuente, ion, p) {
+export function textoCara(fuente, ion, p, caja) {
   const q = sanear(p);
-  const L = q.lado, margen = L * 0.1, ancho = L - 2 * margen;
+  const { w: ancho, h: alto, cy = 0, maxTam = 2 } = caja || { w: 0.8 * q.lado, h: 0.8 * q.lado, cy: 0 };
   const signo = fuente.charToGlyphIndex("−") > 0 ? "−" : "-";
   const ct = cargaTexto(ion, signo);
   const partes = trozos(ion.f);
@@ -58,13 +60,14 @@ export function textoCara(fuente, ion, p) {
   const medirFormula = (s) => partes.reduce((a, t) => a + fuente.getAdvanceWidth(t.txt, t.sub ? s * 0.6 : s), 0);
   const medirTodo = (s) => medirFormula(s) + s * 0.04 + fuente.getAdvanceWidth(ct, s * 0.5);
 
-  let s = L * 0.42 * q.tamanoTexto;
+  const tam = Math.min(q.tamanoTexto, maxTam);   // en las caras pequeñas (triángulos, cometas) las letras no pueden crecer tanto
+  let s = alto * 0.525 * tam;
   const maximo = ancho * 0.98;
   if (medirTodo(s) > maximo) s *= maximo / medirTodo(s);
 
   const polys = [];
   // la y crece hacia abajo en opentype: la línea base cae a 0,36 em por debajo del centro (mayúsculas ≈ 0,72 em); con nombre, sube un poco
-  const base = (q.mostrarNombre ? -L * 0.04 : 0) + s * 0.36;
+  const base = (q.mostrarNombre ? -alto * 0.05 : 0) + s * 0.36;
   let x = -medirTodo(s) / 2;
   for (const t of partes) {
     const sz = t.sub ? s * 0.6 : s;
@@ -76,13 +79,13 @@ export function textoCara(fuente, ion, p) {
 
   if (q.mostrarNombre) {
     const nom = nombreIon(ion);
-    let ns = L * 0.115 * Math.max(0.8, q.tamanoTexto);
-    const w = fuente.getAdvanceWidth(nom, ns);
-    if (w > ancho) ns *= ancho / w;
-    polys.push(...aplanar(fuente.getPath(nom, -fuente.getAdvanceWidth(nom, ns) / 2, L * 0.34, ns).commands));
+    let ns = alto * 0.144 * Math.max(0.8, tam);
+    const wn = fuente.getAdvanceWidth(nom, ns);
+    if (wn > ancho * 0.98) ns *= (ancho * 0.98) / wn;
+    polys.push(...aplanar(fuente.getPath(nom, -fuente.getAdvanceWidth(nom, ns) / 2, alto * 0.425, ns).commands));
   }
-  // volcar la y y centrar el bloque de texto en horizontal
-  return polys.map((pl) => pl.map(([px, py]) => [px, -py]));
+  // volcar la y (arriba positivo) y subir o bajar el bloque a su sitio en la cara
+  return polys.map((pl) => pl.map(([px, py]) => [px, -py + cy]));
 }
 
 /** Caja del texto (para comprobar que cabe en la cara). */

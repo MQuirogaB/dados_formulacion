@@ -15,7 +15,7 @@
   <div class="intro-row">
   <p class="subtitle">
     Un dado de cationes y otro de aniones, con un ion en cada cara. Tira los dos y formula el compuesto que sale.
-    Elige los iones de cada cara y descarga el <strong>STL</strong> para imprimir los cubos en 3D o el <strong>desarrollo plano en SVG</strong> para cortarlo con láser.
+    Elige cuántas caras tiene (6, 8 o 10), pon un ion en cada una y descarga el <strong>STL</strong> para imprimir los dados en 3D o el <strong>desarrollo plano en SVG</strong> para cortarlo con láser.
     Todo ocurre en tu navegador: no se sube nada a ningún servidor.
   </p>
     <a class="logo-web" href="https://miguelquiroga.es" title="miguelquiroga.es" aria-label="Ir a miguelquiroga.es"><img src="./logo.png" alt="Logo de miguelquiroga.es" width="48" height="48"></a>
@@ -25,7 +25,13 @@
     <div class="col-controls">
 
       <div class="card">
-        <p class="card-label">Caras del dado</p>
+        <p class="card-label">Tipo de dado</p>
+        <div class="tabs" role="radiogroup" aria-label="Número de caras">
+          <button type="button" class="tab caras-btn" role="radio" data-caras="6" aria-checked="true">6 caras · cubo</button>
+          <button type="button" class="tab caras-btn" role="radio" data-caras="8" aria-checked="false">8 caras · octaedro</button>
+          <button type="button" class="tab caras-btn" role="radio" data-caras="10" aria-checked="false">10 caras · decaedro</button>
+        </div>
+        <p class="card-label sep">Caras del dado</p>
         <div class="tabs" role="tablist" aria-label="Dado">
           <button type="button" class="tab" role="tab" id="tab-cation" data-tipo="cation" aria-selected="true">Dado de cationes</button>
           <button type="button" class="tab" role="tab" id="tab-anion" data-tipo="anion" aria-selected="false">Dado de aniones</button>
@@ -47,7 +53,7 @@
           <span class="panel-hint">Tamaño, letras, solapas…</span>
         </summary>
         <div class="panel-body">
-          <div class="row"><label for="lado">Arista del cubo (mm)</label><input type="number" id="lado" min="15" max="80" step="1"></div>
+          <div class="row"><label for="lado" id="lado-etq">Arista del cubo (mm)</label><input type="number" id="lado" min="15" max="80" step="1"></div>
           <div class="row"><label for="tamanoTexto">Tamaño de las letras (×)</label><input type="number" id="tamanoTexto" min="0.5" max="2" step="0.1"></div>
           <div class="row"><label for="fontFamily">Tipografía</label><select id="fontFamily"></select></div>
           <div class="check"><input type="checkbox" id="mostrarNombre"><label for="mostrarNombre">Poner el nombre del ion debajo de la fórmula</label></div>

@@ -22,9 +22,9 @@ export function construirSVG(h, o = {}) {
       v += `<path d="${pathDe(d.dev.corte, ox, oy)}" fill="${d.dev.caras.some((x) => x.ion) ? c.cara : "#e9e9ee"}" stroke="#00000055" stroke-width="0.3" stroke-linejoin="round"/>`;
       v += `<path d="${lineas(d.dev.pliegues, ox, oy)}" fill="none" stroke="#00000044" stroke-width="0.25" stroke-dasharray="1.5 1"/>`;
       d.dev.caras.forEach((cara, ci) => {
-        const L = h.lado, activa = s.activa && s.activa.tipo === d.tipo && s.activa.cara === ci;
+        const activa = s.activa && s.activa.tipo === d.tipo && s.activa.cara === ci;
         v += `<g class="cara${activa ? " activa" : ""}" data-tipo="${d.tipo}" data-cara="${ci}">` +
-             `<rect x="${r3(cara.cara.col * L + ox)}" y="${r3(cara.cara.fila * L + oy)}" width="${r3(L)}" height="${r3(L)}" fill="${activa ? "#ffffff55" : "transparent"}" stroke="${activa ? "#9a6bb4" : "none"}" stroke-width="0.9"/>` +
+             `<path d="${pathDe([cara.pol], ox, oy)}" fill="${activa ? "#ffffff55" : "transparent"}" stroke="${activa ? "#9a6bb4" : "none"}" stroke-width="0.9" stroke-linejoin="round"/>` +
              `<path d="${pathDe(cara.texto, ox, oy)}" fill="${c.texto}" fill-rule="evenodd" pointer-events="none"/></g>`;
       });
     });

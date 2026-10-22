@@ -1,5 +1,5 @@
-// STL del dado: un cubo cerrado (la malla es solo la superficie) con el texto de cada cara hundido, en relieve o incrustado.
-// Sistema de coordenadas: x → derecha, y → hacia el fondo, z → arriba; el cubo ocupa [0, L]³.
+// STL del dado: un poliedro cerrado (la malla es solo la superficie) con el texto de cada cara hundido, en relieve o incrustado.
+// Sistema de coordenadas: x → derecha, y → hacia el fondo, z → arriba; el dado apoya en una cara y todo está en coordenadas ≥ 0.
 
 import earcut from "./vendor/earcut.js";
 import { areaFirmada, diferencia, regiones } from "./geo.js";
@@ -89,13 +89,9 @@ function limpiar(anillo) {
 }
 const limpiarRegs = (regs) => regs.map((r) => ({ outer: limpiar(r.outer), holes: r.holes.map(limpiar) }));
 
-/** Anillo cuadrado antihorario (y hacia arriba) de una cara de arista L, centrado en el origen. */
-const cuadrado = (L) => { const a = L / 2; return [[-a, -a], [a, -a], [a, a], [-a, a]]; };
-
 /** Mallas de una cara en coordenadas locales: la superficie está en z = 0 y la normal hacia fuera es +z. */
-function caraLocal(C, texto, L, modo, h) {
+function caraLocal(C, texto, sq, modo, h) {
   const placa = new Malla();
-  const sq = cuadrado(L);
   if (!texto.length) { tapa(placa, { outer: sq, holes: [] }, 0, true); return { placa, texto: null }; }
   const letras = limpiarRegs(regiones(C, texto));
   if (modo === "relieve") {
@@ -137,48 +133,67 @@ function dentroDe([px, py], anillo) {
   return d;
 }
 
-/** Pasa una malla local de la cara al espacio del dado (x → derecha, y → fondo, z → arriba; el cubo ocupa de 0 a L). */
-function acolocar(dest, local, cara, L, off = 0) {
-  const [nx, ny, nz] = cara.n, [rx, ry, rz] = cara.r, [ux, uy, uz] = cara.u;
-  const c = L / 2 + off, d = L / 2;   // centro del cubo y distancia del centro a cada cara
-  const P = ([x, y, z]) => [c + nx * (d + z) + rx * x + ux * y, c + ny * (d + z) + ry * x + uy * y, c + nz * (d + z) + rz * x + uz * y];
-  for (const v of local.t) dest.t.push(P(v));
+/** Pasa una malla local de la cara (superficie en z = 0, normal +z) a su sitio en el dado. */
+function acolocar(dest, local, cara) {
+  const [nx, ny, nz] = cara.n, [rx, ry, rz] = cara.r, [ux, uy, uz] = cara.u, [ox, oy, oz] = cara.origen;
+  for (const [x, y, z] of local.t) dest.t.push([ox + rx * x + ux * y + nx * z, oy + ry * x + uy * y + ny * z, oz + rz * x + uz * y + nz * z]);
+}
+
+/** Gira la malla para que la cara de abajo (la de centroide más bajo) apoye en la cama y la traslada a coordenadas ≥ 0. */
+function aLaCama(mallas, poli) {
+  let base = 0;
+  const zc = (c) => c.verts.reduce((s, v) => s + v[2], 0) / c.verts.length;
+  poli.caras.forEach((c, i) => { if (zc(c) < zc(poli.caras[base]) - 1e-9) base = i; });
+  const [nx, ny, nz] = poli.caras[base].n;
+  let giro = (v) => v;
+  if (nz > -0.999999) {
+    // Rodrigues: lleva la normal de la cara de apoyo a (0, 0, −1)
+    const s = Math.hypot(ny, nx), c = -nz;
+    const e = s < 1e-12 ? [1, 0, 0] : [ny / s, -nx / s, 0];
+    giro = (v) => {
+      const kx = e[1] * v[2] - e[2] * v[1], ky = e[2] * v[0] - e[0] * v[2], kz = e[0] * v[1] - e[1] * v[0];
+      const d = e[0] * v[0] + e[1] * v[1] + e[2] * v[2];
+      return [v[0] * c + kx * s + e[0] * d * (1 - c), v[1] * c + ky * s + e[1] * d * (1 - c), v[2] * c + kz * s + e[2] * d * (1 - c)];
+    };
+  }
+  const todas = mallas.filter(Boolean);
+  for (const m of todas) m.t = m.t.map(giro);
+  const lo = [Infinity, Infinity, Infinity];
+  for (const m of todas) for (const v of m.t) for (let k = 0; k < 3; k++) if (v[k] < lo[k]) lo[k] = v[k];
+  for (const m of todas) m.t = m.t.map((v) => [v[0] - lo[0], v[1] - lo[1], v[2] - lo[2]]);
 }
 
 /**
- * Mallas de un dado: { cubo, textos }. `textos` solo en modo incrustado (las letras, aparte).
+ * Mallas de un dado: { cubo, textos }. `textos` = polígonos de cada cara en sus coordenadas locales; el `textos` del resultado solo existe en modo incrustado.
  * En «relieve» las letras sobresalen de la cara (y se solapan 0,2 mm con ella: el laminador las une).
+ * El dado queda apoyado en una cara y todo en coordenadas ≥ 0.
  */
-export function construirDado(C, caras, q) {
-  const L = q.lado, h = q.profundidad;
-  const off = q.modoTexto === "relieve" ? h : 0;   // con relieve, todo se desplaza para que nada quede por debajo de 0
-  const cubo = new Malla(), textos = new Malla();
-  for (const { cara, texto } of caras) {
-    const local = caraLocal(C, texto, L, q.modoTexto, h);
-    acolocar(cubo, local.placa, cara, L, off);
-    if (local.texto) acolocar(local.enPlaca ? cubo : textos, local.texto, cara, L, off);
-  }
-  return { cubo, textos: textos.n ? textos : null };
+export function construirDado(C, poli, textos, q) {
+  const h = q.profundidad;
+  const cubo = new Malla(), letras = new Malla();
+  poli.caras.forEach((cara, i) => {
+    const local = caraLocal(C, textos[i] || [], cara.anillo, q.modoTexto, h);
+    acolocar(cubo, local.placa, cara);
+    if (local.texto) acolocar(local.enPlaca ? cubo : letras, local.texto, cara);
+  });
+  aLaCama([cubo, letras.n ? letras : null], poli);
+  return { cubo, textos: letras.n ? letras : null };
 }
 
-/** Archivos STL de los dados de la hoja: [{ nombre, malla }]. `h` = resultado de hoja() (con las caras de cada dado). */
+/** Archivos STL de los dados de la hoja: [{ nombre, malla }]. `h` = resultado de hoja(). */
 export function construirSTL(C, h, q) {
   const out = [];
   for (const d of h.dados) {
     if (!d.dev.caras.some((c) => c.ion)) continue;
-    // las letras vienen en coordenadas del desarrollo: se pasan a locales de cada cara (y hacia arriba, origen en el centro)
-    const L = q.lado;
-    const caras = d.dev.caras.map((c) => ({
-      cara: c.cara,
-      texto: c.texto.map((pl) => pl.map(([x, y]) => [x - (c.cara.col + 0.5) * L, (c.cara.fila + 0.5) * L - y])),
-    }));
     const nom = d.tipo === "anion" ? "aniones" : "cationes";
-    const m = construirDado(C, caras, q);
+    const m = construirDado(C, h.poli, d.dev.caras.map((c) => c.textoLocal), q);
     if (m.textos) { out.push({ nombre: `dado-${nom}-cubo.stl`, malla: m.cubo }); out.push({ nombre: `dado-${nom}-textos.stl`, malla: m.textos }); }
     else out.push({ nombre: `dado-${nom}.stl`, malla: m.cubo });
   }
   return out;
 }
+
+// ---------------------------------------------------------------------
 // Archivos
 // ---------------------------------------------------------------------
 
