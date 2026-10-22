@@ -341,4 +341,6 @@ input[type="color"] { width: 44px; height: 30px; padding: 2px; border: 1px solid
 .rejilla.anion .cara-btn:not(.vacia) { background: #2a2d33; color: #fff; border-color: #2a2d33; }
 .rejilla.anion .cara-btn:not(.vacia) small { color: #ffffffb0; }
 .card-label.sep { margin-top: 14px; }
-.tab[role="radio"][aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.opcion { font: inherit; font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border); background: #fff; cursor: pointer; }
+.opcion:hover { border-color: var(--accent); }
+.opcion[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }

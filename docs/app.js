@@ -1,11 +1,11 @@
 import opentype from "opentype.js";
 
-import { CATIONES, ANIONES, FAMILIAS_CATION, FAMILIAS_ANION, ionBonito } from "./iones.js?v=1";
-import { DEFAULTS, sanear } from "./cara.js?v=1";
-import { hoja } from "./dado.js?v=1";
-import { LADO_POR_DEFECTO } from "./poliedros.js?v=1";
-import { construirSVG, envolverSVG } from "./svg.js?v=1";
-import { construirSTL, aBinario, zip } from "./stl.js?v=1";
+import { CATIONES, ANIONES, FAMILIAS_CATION, FAMILIAS_ANION, ionBonito } from "./iones.js?v=2";
+import { DEFAULTS, sanear } from "./cara.js?v=2";
+import { hoja } from "./dado.js?v=2";
+import { LADO_POR_DEFECTO } from "./poliedros.js?v=2";
+import { construirSVG, envolverSVG } from "./svg.js?v=2";
+import { construirSTL, aBinario, zip } from "./stl.js?v=2";
 
 const el = (id) => document.getElementById(id);
 
