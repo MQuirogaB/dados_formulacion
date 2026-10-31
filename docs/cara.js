@@ -13,6 +13,7 @@ export const DEFAULTS = {
   modoTexto: "hundido", // "hundido" | "relieve" | "incrustado"
   solapas: true,     // solapas de pegado en el desarrollo
   pliegues: true,    // líneas de plegado en el desarrollo
+  redondeo: 1,       // radio con que se redondean las aristas del dado en el STL (mm); 0 = aristas rectas
   separacion: 8,     // espacio entre desarrollos en la hoja (mm)
 };
 
@@ -29,6 +30,7 @@ export function sanear(p = {}) {
   q.modoTexto = MODOS.includes(q.modoTexto) ? q.modoTexto : "hundido";
   q.solapas = !!q.solapas;
   q.pliegues = !!q.pliegues;
+  q.redondeo = Math.min(0.06 * q.lado, Math.max(0, num(q.redondeo, DEFAULTS.redondeo)));
   q.separacion = Math.min(40, Math.max(2, num(q.separacion, DEFAULTS.separacion)));
   return q;
 }
@@ -52,7 +54,7 @@ function trozos(formula) {
  */
 export function textoCara(fuente, ion, p, caja) {
   const q = sanear(p);
-  const { w: ancho, h: alto, cy = 0, maxTam = 2 } = caja || { w: 0.8 * q.lado, h: 0.8 * q.lado, cy: 0 };
+  const { w: ancho, h: alto, cy = 0, maxTam = 2 } = caja || { w: 0.9 * q.lado, h: 0.9 * q.lado, cy: 0 };
   const signo = fuente.charToGlyphIndex("−") > 0 ? "−" : "-";
   const ct = cargaTexto(ion, signo);
   const partes = trozos(ion.f);
@@ -61,7 +63,7 @@ export function textoCara(fuente, ion, p, caja) {
   const medirTodo = (s) => medirFormula(s) + s * 0.04 + fuente.getAdvanceWidth(ct, s * 0.5);
 
   const tam = Math.min(q.tamanoTexto, maxTam);   // en las caras pequeñas (triángulos, cometas) las letras no pueden crecer tanto
-  let s = alto * 0.525 * tam;
+  let s = alto * 0.7 * tam;
   const maximo = ancho * 0.98;
   if (medirTodo(s) > maximo) s *= maximo / medirTodo(s);
 

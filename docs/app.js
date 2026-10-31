@@ -1,11 +1,11 @@
 import opentype from "opentype.js";
 
-import { CATIONES, ANIONES, FAMILIAS_CATION, FAMILIAS_ANION, ionBonito } from "./iones.js?v=2";
-import { DEFAULTS, sanear } from "./cara.js?v=2";
-import { hoja } from "./dado.js?v=2";
-import { LADO_POR_DEFECTO } from "./poliedros.js?v=2";
-import { construirSVG, envolverSVG } from "./svg.js?v=2";
-import { construirSTL, aBinario, zip } from "./stl.js?v=2";
+import { CATIONES, ANIONES, FAMILIAS_CATION, FAMILIAS_ANION, ionBonito } from "./iones.js?v=3";
+import { DEFAULTS, sanear } from "./cara.js?v=3";
+import { hoja } from "./dado.js?v=3";
+import { LADO_POR_DEFECTO } from "./poliedros.js?v=3";
+import { construirSVG, envolverSVG } from "./svg.js?v=3";
+import { construirSTL, aBinario, zip } from "./stl.js?v=3";
 
 const el = (id) => document.getElementById(id);
 
@@ -48,7 +48,7 @@ const dados = { cation: Array(10).fill(null), anion: Array(10).fill(null) };   /
 const activo = { tipo: "cation", cara: 0 };
 let nCaras = 6;
 
-const NUM_FIELDS = ["lado", "tamanoTexto", "profundidad", "separacion"];
+const NUM_FIELDS = ["lado", "tamanoTexto", "profundidad", "redondeo", "separacion"];
 const CHECK_FIELDS = ["mostrarNombre", "solapas", "pliegues"];
 
 function leerParametros() {

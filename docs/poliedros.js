@@ -43,7 +43,7 @@ function cubo(L) {
   return EJES_CUBO.map(({ n, r, u }) => {
     const o = add(c, mul(n, a));
     const vs = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => add(o, add(mul(r, x * a), mul(u, y * a))));
-    return { verts: vs, n, r, u, origen: o, anillo: [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => [x * a, y * a]), caja: { w: 0.8 * L, h: 0.8 * L, cy: 0 } };
+    return { verts: vs, n, r, u, origen: o, anillo: [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => [x * a, y * a]), caja: { w: 0.9 * L, h: 0.9 * L, cy: 0 } };
   });
 }
 

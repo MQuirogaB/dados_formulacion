@@ -163,6 +163,118 @@ function aLaCama(mallas, poli) {
   for (const m of todas) m.t = m.t.map((v) => [v[0] - lo[0], v[1] - lo[1], v[2] - lo[2]]);
 }
 
+// ---------------------------------------------------------------------
+// Aristas redondeadas
+// ---------------------------------------------------------------------
+
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const cruz3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const claveV = (v) => v.map((x) => Math.round(x * 1e5)).join(",");
+
+/**
+ * Redondea las aristas de un poliedro convexo con radio `r` (mm). Cada cara se recorta hacia dentro (distancia r·tan(giro/2) en cada arista,
+ * como un redondeo de radio r) y el hueco se rellena con una tira curva (Bézier cuadrática con el vértice agudo como punto de control)
+ * por cada arista y un parche por cada vértice. Devuelve { insets, malla }: el contorno recortado de cada cara (coordenadas locales)
+ * y la malla de aristas y vértices, ya orientada hacia fuera.
+ */
+function redondear(poli, r, N = 5) {
+  const caras = poli.caras;
+  const cen = [0, 0, 0];
+  let nv = 0;
+  for (const c of caras) for (const v of c.verts) { for (let k = 0; k < 3; k++) cen[k] += v[k]; nv++; }
+  for (let k = 0; k < 3; k++) cen[k] /= nv;
+  const claves = caras.map((c) => c.verts.map(claveV));
+  const vecina = (f, i) => {
+    const n = claves[f].length, a = claves[f][i], b = claves[f][(i + 1) % n];
+    for (let g = 0; g < caras.length; g++) if (g !== f && claves[g].includes(a) && claves[g].includes(b)) return g;
+    return -1;
+  };
+  const a3 = (c, [x, y]) => [c.origen[0] + c.r[0] * x + c.u[0] * y, c.origen[1] + c.r[1] * x + c.u[1] * y, c.origen[2] + c.r[2] * x + c.u[2] * y];
+
+  // contorno recortado de cada cara
+  const insets = caras.map((c, f) => {
+    const P = c.anillo, n = P.length, sg = areaFirmada(P) > 0 ? 1 : -1;
+    const rectas = P.map((a, i) => {
+      const b = P[(i + 1) % n], g = vecina(f, i);
+      const giro = g >= 0 ? Math.acos(Math.max(-1, Math.min(1, dot3(c.n, caras[g].n)))) : 0;
+      const d = r * Math.tan(giro / 2);
+      const l = Math.hypot(b[0] - a[0], b[1] - a[1]), dx = (b[0] - a[0]) / l, dy = (b[1] - a[1]) / l;
+      return { p: [a[0] - sg * dy * d, a[1] + sg * dx * d], d: [dx, dy] };
+    });
+    return P.map((_, i) => {
+      const A = rectas[(i + n - 1) % n], B = rectas[i];
+      const den = A.d[0] * B.d[1] - A.d[1] * B.d[0];
+      const t = ((B.p[0] - A.p[0]) * B.d[1] - (B.p[1] - A.p[1]) * B.d[0]) / den;
+      return [A.p[0] + t * A.d[0], A.p[1] + t * A.d[1]];
+    });
+  });
+  const in3 = caras.map((c, f) => insets[f].map((p) => a3(c, p)));
+
+  const malla = new Malla();
+  const tri = (a, b, c) => {   // orientada hacia fuera (el poliedro es convexo)
+    const nn = cruz3(sub3(b, a), sub3(c, a));
+    const m = [(a[0] + b[0] + c[0]) / 3, (a[1] + b[1] + c[1]) / 3, (a[2] + b[2] + c[2]) / 3];
+    if (dot3(nn, sub3(m, cen)) < 0) malla.tri(a, c, b); else malla.tri(a, b, c);
+  };
+  const curva = (pa, pb, Q) => Array.from({ length: N + 1 }, (_, k) => {
+    const t = k / N, m = 1 - t;
+    return [0, 1, 2].map((j) => m * m * pa[j] + 2 * m * t * Q[j] + t * t * pb[j]);
+  });
+  const cache = new Map();   // «caraMenor|caraMayor|vértice» → puntos de la curva, de la cara menor a la mayor
+  const curvaEn = (f, g, vk, pf, pg, V) => {
+    const k = f < g ? `${f}|${g}|${vk}` : `${g}|${f}|${vk}`;
+    if (!cache.has(k)) cache.set(k, f < g ? curva(pf, pg, V) : curva(pg, pf, V));
+    const pts = cache.get(k);
+    return f < g ? pts : [...pts].reverse();
+  };
+
+  const enVertice = new Map();   // vértice → [{ f, i }]
+  caras.forEach((c, f) => c.verts.forEach((v, i) => {
+    const k = claves[f][i];
+    if (!enVertice.has(k)) enVertice.set(k, []);
+    enVertice.get(k).push({ f, i });
+  }));
+
+  // tiras de las aristas
+  caras.forEach((c, f) => {
+    const n = c.verts.length;
+    for (let i = 0; i < n; i++) {
+      const g = vecina(f, i);
+      if (g < f) continue;
+      const i1 = (i + 1) % n;
+      const j0 = claves[g].indexOf(claves[f][i]), j1 = claves[g].indexOf(claves[f][i1]);
+      const c0 = curvaEn(f, g, claves[f][i], in3[f][i], in3[g][j0], c.verts[i]);
+      const c1 = curvaEn(f, g, claves[f][i1], in3[f][i1], in3[g][j1], c.verts[i1]);
+      for (let k = 0; k < N; k++) { tri(c0[k], c0[k + 1], c1[k + 1]); tri(c0[k], c1[k + 1], c1[k]); }
+    }
+  });
+
+  // parches de los vértices
+  for (const [vk, lista] of enVertice) {
+    const V = caras[lista[0].f].verts[lista[0].i];
+    const nV = sub3(V, cen), l = Math.hypot(...nV);
+    const w = nV.map((x) => x / l);
+    const e1 = cruz3(w, Math.abs(w[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]), l1 = Math.hypot(...e1);
+    const u1 = e1.map((x) => x / l1), u2 = cruz3(w, u1);
+    const centroCara = (f) => { const vs = caras[f].verts; return [0, 1, 2].map((j) => vs.reduce((s, v) => s + v[j], 0) / vs.length); };
+    const orden = lista.map((e) => {
+      const d = sub3(centroCara(e.f), V);
+      return { ...e, ang: Math.atan2(dot3(d, u2), dot3(d, u1)) };
+    }).sort((a, b) => a.ang - b.ang);
+    const lazo = [];
+    for (let m = 0; m < orden.length; m++) {
+      const A = orden[m], B = orden[(m + 1) % orden.length];
+      const pts = curvaEn(A.f, B.f, vk, in3[A.f][A.i], in3[B.f][B.i], V);
+      lazo.push(...pts.slice(0, -1));
+    }
+    const mx = [0, 1, 2].map((j) => lazo.reduce((s, p) => s + p[j], 0) / lazo.length);
+    const P = [0, 1, 2].map((j) => 0.5 * V[j] + 0.5 * mx[j]);
+    for (let m = 0; m < lazo.length; m++) tri(P, lazo[m], lazo[(m + 1) % lazo.length]);
+  }
+  return { insets, malla };
+}
+
 /**
  * Mallas de un dado: { cubo, textos }. `textos` = polígonos de cada cara en sus coordenadas locales; el `textos` del resultado solo existe en modo incrustado.
  * En «relieve» las letras sobresalen de la cara (y se solapan 0,2 mm con ella: el laminador las une).
@@ -171,8 +283,10 @@ function aLaCama(mallas, poli) {
 export function construirDado(C, poli, textos, q) {
   const h = q.profundidad;
   const cubo = new Malla(), letras = new Malla();
+  const R = q.redondeo > 0 ? redondear(poli, q.redondeo) : null;
+  if (R) cubo.añadir(R.malla);
   poli.caras.forEach((cara, i) => {
-    const local = caraLocal(C, textos[i] || [], cara.anillo, q.modoTexto, h);
+    const local = caraLocal(C, textos[i] || [], R ? R.insets[i] : cara.anillo, q.modoTexto, h);
     acolocar(cubo, local.placa, cara);
     if (local.texto) acolocar(local.enPlaca ? cubo : letras, local.texto, cara);
   });

@@ -170,7 +170,7 @@ const volumenPoli = (P) => { // volumen del poliedro sin texto: pirámides desde
   return v;
 };
 const dado = (n, ions, extra = {}, tipo = "cation") => {
-  const q = sanear({ caras: n, lado: LADO_POR_DEFECTO[n], ...extra });
+  const q = sanear({ caras: n, lado: LADO_POR_DEFECTO[n], redondeo: 0, ...extra });
   const P = poliedro(n, q.lado);
   return { q, P, h: { dados: [{ tipo, dev: desarrollo(C, fuente, P, ions, q) }], poli: P, lado: q.lado } };
 };
@@ -194,6 +194,19 @@ for (const n of TIPOS) for (const modo of ["hundido", "relieve", "incrustado"]) 
     const tex = archivos[1].malla;
     assert.ok(volumen(tex) > 0);
     assert.ok(Math.abs(vol + volumen(tex) - V0) < 0.5, `d${n}: cubo + textos = poliedro (${vol + volumen(tex)} vs ${V0})`);
+  }
+}
+{ // aristas redondeadas: malla cerrada, mismo tamaño total y algo menos de volumen
+  for (const n of TIPOS) for (const modo of ["hundido", "relieve", "incrustado"]) {
+    const rect = dado(n, variados(n), { modoTexto: modo });
+    const red = dado(n, variados(n), { modoTexto: modo, redondeo: 1.5 });
+    assert.ok(red.q.redondeo > 0, "el redondeo se conserva");
+    const a0 = construirSTL(C, rect.h, rect.q), a1 = construirSTL(C, red.h, red.q);
+    for (const a of a1) cerrada(a.malla, `d${n} ${modo} redondeado ${a.nombre}`);
+    const e0 = extension(a0[0].malla), e1 = extension(a1[0].malla);
+    for (let k = 0; k < 3; k++) { const dif = e0.hi[k] - e1.hi[k]; assert.ok(dif > -1e-3 && dif < 2 * 1.5 && Math.abs(e1.lo[k]) < 1e-6, `d${n} ${modo}: tamaño (${dif})`); if (n === 6 && modo !== "relieve") assert.ok(Math.abs(dif) < 1e-3, "el cubo redondeado mide lo mismo"); }
+    const perdido = volumen(a0[0].malla) - volumen(a1[0].malla);
+    assert.ok(perdido > 0 && perdido < volumen(a0[0].malla) * 0.05, `d${n} ${modo}: el redondeo quita algo de volumen (${perdido})`);
   }
 }
 { // caras vacías y repetidas
